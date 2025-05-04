@@ -51,9 +51,8 @@ class ProductController extends Controller
     }
 
      //  Get all products from Sellers
-    public function index(Request $request)
+    public function sellerProducts(Request $request, $sellerId)
     {
-        $sellerId = $request->query('SellerID');
     
         if ($sellerId) {
             $product = Product::where('SellerID', $sellerId)->get();

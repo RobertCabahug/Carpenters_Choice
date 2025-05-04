@@ -10,6 +10,7 @@
         "cloudinary/cloudinary_php": "^2.14",
         "jenssegers/mongodb": "*",
         "laravel/framework": "^11.9",
+        "laravel/sanctum": "^4.1",
         "laravel/tinker": "^2.9",
         "mongodb/laravel-mongodb": "*"
     },

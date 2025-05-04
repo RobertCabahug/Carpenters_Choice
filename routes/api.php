@@ -44,6 +44,7 @@ Route::put('/logistics/{id}', [LogisticController::class, 'update']);
 
 //Product Route
 Route::get('/products', [ProductController::class, 'index']);
+Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::post('/products', [ProductController::class, 'store']);
 Route::put('/products/{id}', [ProductController::class, 'update']);
@@ -55,3 +56,4 @@ Route::get('/sellers/{id}', [SellerController::class, 'show']);
 Route::post('/sellers', [SellerController::class, 'store']);
 Route::put('/sellers/{id}', [SellerController::class, 'update']);
 Route::delete('/sellers/{id}', [SellerController::class, 'destroy']);
+Route::get('/sellers/products', [ProductController::class, 'seller']); // seller products
