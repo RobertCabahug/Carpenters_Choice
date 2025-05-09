@@ -1,59 +1,60 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\CartController;
-use App\Http\Controllers\TransactionController;
-use App\Http\Controllers\BuyItemController;
-use App\Http\Controllers\LogisticController;
+use App\Http\Controllers\ConversationsController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
-use App\Http\Controllers\SellerController;
+use App\Http\Controllers\UserController;
+use App\Http\Middleware\AuthTokenFails;
+use App\Http\Middleware\IsUserCustomer;
+use App\Http\Middleware\IsUserSeller;
+use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return response()->json(['message' => "Hello from Carpenter's Choice, Made with Laravel, MongoDB and Herd!"]);
-});
-
-//Auth Route
-Route::post('/register', [UserController::class, 'register']);
 Route::post('/login', [UserController::class, 'login']);
+Route::post('/register', [UserController::class, 'register']);
 
-//Carts Route
-Route::get('/carts', [CartController::class, 'index']);
-Route::get('/carts/{id}', [CartController::class, 'show']);
-Route::post('/carts', [CartController::class, 'store']);
-Route::put('/carts/{id}', [CartController::class, 'update']);
-Route::delete('/carts/{id}', [CartController::class, 'destroy']);
 
-//Transaction Route
-Route::get('/transactions', [TransactionController::class, 'index']);
-Route::get('/transactions/{id}', [TransactionController::class, 'show']);
-Route::post('/transactions', [TransactionController::class, 'store']);
-Route::put('/transactions/{id}', [TransactionController::class, 'update']);
-Route::delete('/transactions/{id}', [TransactionController::class, 'destroy']);
+Route::middleware([AuthTokenFails::class])->group(function(){
+    Route::delete('/logout', [UserController::class, 'logout']);
 
-//Buy Item Route
-Route::get('/buy-items', [BuyItemController::class, 'index']);
-Route::get('/buy-items/{id}', [BuyItemController::class, 'show']);
-Route::post('/buy-items', [BuyItemController::class, 'store']);
+    Route::get('/me', [UserController::class,'me']);
+    Route::get('/me/conversations', [UserController::class,'me']);
 
-//Logistic Route
-Route::get('/logistics', [LogisticController::class, 'index']);
-Route::get('/logistics/{id}', [LogisticController::class, 'show']);
-Route::post('/logistics', [LogisticController::class, 'store']);
-Route::put('/logistics/{id}', [LogisticController::class, 'update']);
+    Route::middleware([IsUserCustomer::class])->group(function(){
+        Route::patch('/me/start-selling', [UserController::class,'startSelling']);
 
-//Product Route
-Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products', [ProductController::class, 'index']);
-Route::get('/products/{id}', [ProductController::class, 'show']);
-Route::post('/products', [ProductController::class, 'store']);
-Route::put('/products/{id}', [ProductController::class, 'update']);
-Route::delete('/products/{id}', [ProductController::class, 'destroy']);
+        Route::get('/me/cart', [UserController::class, 'cart']);
+        Route::post('/me/cart', [UserController::class, 'updateCart']); // add or update cart
+        Route::delete('/me/cart', [UserController::class, 'clearCart']);
 
-//Seller Route
-Route::get('/sellers', [SellerController::class, 'index']);
-Route::get('/sellers/{id}', [SellerController::class, 'show']);
-Route::post('/sellers', [SellerController::class, 'store']);
-Route::put('/sellers/{id}', [SellerController::class, 'update']);
-Route::delete('/sellers/{id}', [SellerController::class, 'destroy']);
-Route::get('/sellers/products', [ProductController::class, 'seller']); // seller products
+        Route::post('/order', [OrderController::class, 'add']);
+
+        Route::get('/me/favorites', [UserController::class, 'favorites']);
+        Route::post('/me/favorites', [UserController::class, 'addToFavorites']); // add or update cart
+        Route::delete('/me/favorites/{id}', [UserController::class, 'unfavorite']);
+
+        Route::post('/conversation', [ConversationsController::class, 'create']);
+    });
+
+    Route::middleware([IsUserSeller::class])->group(function(){
+        Route::patch('/me/quit-selling', [UserController::class,'quitSelling']);
+
+        Route::get('/me/products', [UserController::class, 'products']);
+        Route::get('/me/orders', [UserController::class, 'orders']);
+
+        Route::post('/product', [ProductController::class, 'add']);
+        Route::patch('/product/{id}', [ProductController::class, 'edit']);
+        Route::delete('/product/{id}', [ProductController::class, 'delete']);
+        
+    });
+
+    Route::get('/product', [ProductController::class, 'all']);
+    Route::get('/product/{id}', [ProductController::class, 'get']);
+    
+    Route::get('/order/{id}', [OrderController::class, 'orderData']);
+    Route::post('/order/{id}', [OrderController::class, 'addLog']);
+
+    Route::get('/conversation/{id}', [ConversationsController::class, 'messages']);
+    Route::post('/conversation/{id}', [ConversationsController::class, 'message']);
+    Route::patch('/conversation/{id}/read', [ConversationsController::class, 'readMessage']);
+
+});

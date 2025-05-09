@@ -2,116 +2,139 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Product;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class ProductController extends Controller
 {
-    //  Create product
-    public function store(Request $request)
-    {
-        $request->validate([
-            'SellerID' => 'required',
-            'Name' => 'required',
-            'Price' => 'required|numeric',
-            'Description' => 'required',
-            'Rating' => 'nullable|numeric',
-            'Buy' => 'required|boolean',
-            'Rent' => 'required|boolean',
-            'Image' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+    public function add(Request $request){
+        $validation = Validator::make($request->all(), [
+            'prod_name' => 'required|max:50',
+            'prod_image' => 'required|mimes:jpg,jpeg,png|max:2048',
+            'prod_description' => 'required|max:500',
+            'prod_rent_price' => 'required|numeric|min:0',
+            'prod_rent_nondiscounted' => 'required|numeric|min:0',
+            'prod_rent_interval' => 'required|integer',
+            'prod_buy_price' => 'required|numeric|min:0',
+            'prod_buy_nondiscounted' => 'required|numeric|min:0',
         ]);
 
-        $latestProduct = Product::orderBy('_id', 'desc')->first();
-        $nextId = $latestProduct ? intval(substr($latestProduct->ProductID, 5)) + 1 : 1;
-        $generatedProductId = 'PROD-' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
-
-        // Upload image to Cloudinary
-        $uploadedFileUrl = Cloudinary::upload($request->file('Image')->getRealPath())->getSecurePath();
-
-        $product = Product::create([
-            'ProductID' => $request->ProductID,
-            'SellerID' => $request->SellerID,
-            'Image' => $uploadedFileUrl,
-            'Name' => $request->Name,
-            'Price' => $request->Price,
-            'Description' => $request->Description,
-            'Rating' => $request->Rating ?? 0,
-            'Buy' => $request->Buy,
-            'Rent' => $request->Rent,
-        ]);
-
-        return response()->json(['status' => 'success', 'product' => $product], 201);
-    }
-
-    //  Get all products
-    public function index()
-    {
-        return response()->json(Product::all());
-    }
-
-     //  Get all products from Sellers
-    public function sellerProducts(Request $request, $sellerId)
-    {
-    
-        if ($sellerId) {
-            $product = Product::where('SellerID', $sellerId)->get();
-        } else {
+        if($validation->fails()){
             return response()->json([
-                'status' => 'failed',
-                'message' => 'SellerID is required to fetch product.'
-            ], 400);
+                'errors' => $validation->errors(),
+            ], 422);
         }
-    
-        return response()->json(['status' => 'success', 'buyitem' => $product]);
+
+        $validated = $validation->validated();
+
+        $path = $request->file('prod_image')->store('uploads', 'public');
+
+        $product = Product::create(array_merge($validated, [
+            'prod_image' => $path,
+            'user_id' => $request->user()->user_id
+        ]));
+
+
+        return response()->json([
+            'message' => 'Product created successfully!',
+            'links' => [
+                'self' => url('/product/'.$product->user_id)
+            ]
+        ], 200);
+        
     }
 
-    //  Get specific product
-    public function show($id)
-    {
-        $product = Product::find($id);
-
-        if (!$product) {
-            return response()->json(['status' => 'failed', 'message' => 'Product not found'], 404);
-        }
-
-        return response()->json($product);
+    public function all(Request $request){
+        return datatablesAssist($request->query(),[
+            'searchFrom' => ["prod_name", "prod_description", DB::raw("CONCAT(users.user_first_name, ' ', users.user_last_name)")],
+            'orderBy' => 'prod_name',
+            'orderDir' => 'asc'
+        ], function(){
+            return Product::join('users', 'products.user_id', '=', 'users.user_id');
+        });
     }
 
-    //  Update product
-    public function update(Request $request, $id)
-    {
-        $product = Product::find($id);
+    public function get(Request $request, $prodId){
+        $product = Product::where('prod_id', $prodId)->with('seller')->first();
 
-        if (!$product) {
-            return response()->json(['status' => 'failed', 'message' => 'Product not found'], 404);
+        if($product == null){
+            return response()->json([
+                'errors' =>[
+                    'message' => 'Product not found!'
+                ]
+            ], 404);
         }
 
-        $data = $request->only([
-            'Name', 'Price', 'Description', 'Rating', 'Buy', 'Rent'
+        return response()->json([
+            'product' => $product,
+            'links' => [
+                'self' => url('/product/'.$product->user_id)
+            ]
+        ], 200);    
+    }
+
+    public function edit(Request $request, $prodId){
+        $validation = Validator::make($request->all(), [
+            'prod_name' => 'required|max:50',
+            'prod_image' => 'mimes:jpg,jpeg,png|max:2048',
+            'prod_description' => 'required|max:500',
+            'prod_rent_price' => 'required|numeric|min:0',
+            'prod_rent_nondiscounted' => 'required|numeric|min:0',
+            'prod_rent_interval' => 'required|integer',
+            'prod_buy_price' => 'required|numeric|min:0',
+            'prod_buy_nondiscounted' => 'required|numeric|min:0',
         ]);
 
-        if ($request->hasFile('Image')) {
-            $uploadedFileUrl = Cloudinary::upload($request->file('Image')->getRealPath())->getSecurePath();
-            $data['Image'] = $uploadedFileUrl;
+        if($validation->fails()){
+            return response()->json([
+                'errors' => $validation->errors(),
+            ], 422);
         }
 
-        $product->update($data);
+        $validated = $validation->validated();
+        $product = Product::where('prod_id', $prodId)->first($prodId);
 
-        return response()->json(['status' => 'success', 'product' => $product]);
+        if($product == null){
+            return response()->json([
+                'errors' =>[
+                    'message' => 'Product not found!'
+                ]
+            ], 404);
+        }
+
+        $path = $request->file('prod_image') == null ? $product->prod_image :  $request->file('prod_image')->store('uploads', 'public');
+
+        $product = Product::create(array_merge($validated, [
+            'prod_image' => $path,
+        ]));
+        
+
+        return response()->json([
+            'message' => 'Product updated successfully!',
+            'links' => [
+                'self' => url('/product/'.$product->user_id)
+            ]
+        ], 200);
     }
 
-    //  Delete product
-    public function destroy($id)
-    {
-        $product = Product::find($id);
+    public function delete(Request $request, $prodId){
 
-        if (!$product) {
-            return response()->json(['status' => 'failed', 'message' => 'Product not found'], 404);
+        $product = Product::where('prod_id', $prodId)->first($prodId);
+
+        if($product == null){
+            return response()->json([
+                'errors' =>[
+                    'message' => 'Product not found!'
+                ]
+            ], 404);
         }
 
         $product->delete();
 
-        return response()->json(['status' => 'success', 'message' => 'Product deleted']);
+        return response()->json([
+            'message' => 'Product deleted successfully!',
+        ], 200);
     }
 }
